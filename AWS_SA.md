@@ -1,6 +1,6 @@
-# AWS Solutions Architect — Exam & Interview Cheatsheet
+# AWS Solutions Architect — Exam Notes
 
-*Condensed reference covering storage, compute, networking, databases/migration, messaging, caching, analytics/ML, and identity/security/governance — built from practice questions and interview-style notes.*
+*Condensed reference covering storage, compute, networking, databases/migration, messaging, caching, analytics/ML, and identity/security/governance.*
 
 ## 1. Storage
 
@@ -53,6 +53,30 @@ EFS storage classes: **Standard** (frequent) → **IA** (infrequent) → **Archi
 - **CloudFront + private S3 origin** → **Origin Access Control (OAC)** (avoids making the bucket public). CloudFront + custom HTTPS domain → ACM certificate **must be in us-east-1**. S3 bucket's own region doesn't drive the ACM region.
 - **Signed URL vs Signed Cookie** (both give temporary, expiring access to private CloudFront content): Signed URL → one specific object (e.g. a single video); Signed Cookie → access to multiple objects (e.g. a subscriber area) without changing the URL.
 - Capacity tiers: **EC2 Instance Store** → fastest temporary processing; **S3 Standard** → durable, large-scale (hundreds of TB); **S3 Glacier** → cheap long-term archival.
+
+### S3 storage classes
+
+| Class | Access pattern | Min storage duration | Retrieval | Availability | Notes |
+|---|---|---|---|---|---|
+| **S3 Standard** | Frequent | None | Immediate (ms) | 99.99% | Default, highest cost |
+| **S3 Intelligent-Tiering** | Unknown/changing access | None | Immediate (ms) | 99.9% | Auto-moves objects between tiers based on access; small monthly monitoring fee per object; no retrieval fee |
+| **S3 Standard-IA** | Infrequent, but needs millisecond access when read | 30 days | Immediate (ms) | 99.9% | Lower storage cost, per-GB **retrieval fee** |
+| **S3 One Zone-IA** | Infrequent, re-creatable data | 30 days | Immediate (ms) | 99.5% (single AZ) | Cheaper than Standard-IA; no multi-AZ resilience |
+| **S3 Glacier Instant Retrieval** | Rarely accessed, but needs ms access when read | 90 days | Immediate (ms) | 99.9% | Cheapest tier with millisecond retrieval |
+| **S3 Glacier Flexible Retrieval** | Archive | 90 days | Minutes to hours (Expedited/Standard/Bulk) | 99.99% | Bulk retrieval is the cheapest/slowest |
+| **S3 Glacier Deep Archive** | Long-term archive, rarely if ever accessed | 180 days | Hours (Standard: 12h, Bulk: 48h) | 99.99% | Lowest-cost S3 storage class |
+
+### S3 Lifecycle rules
+
+- A **Lifecycle configuration** automates moving objects between storage classes (transition actions) and/or deleting them (expiration actions) based on object age or count of noncurrent versions.
+- **Typical transition order** (cannot skip backward, and AWS enforces the minimum-duration rule per class before it can transition again):
+  `Standard → Standard-IA (≥30 days) → Glacier Instant/Flexible Retrieval (≥90 days total) → Glacier Deep Archive (≥180 days total)`.
+- **Intelligent-Tiering** is the answer whenever the question says *"access patterns are unknown or unpredictable"* — no manual lifecycle rule needed, AWS moves objects automatically and there's no retrieval fee.
+- **Expiration actions**: permanently delete objects (or just their old versions) after N days — used to auto-clean logs, temp uploads, or old object versions in a versioned bucket.
+- **Noncurrent version transitions/expiration**: in a versioned bucket, you can independently age out *noncurrent* (old) versions to cheaper classes or delete them, while keeping the *current* version on Standard — common cost-control pattern.
+- Minimum billing durations mean transitioning an object *too early* (e.g. Standard → Standard-IA before 30 days) can actually cost more than leaving it — exam trap.
+- Objects **already in Glacier/Deep Archive must be restored** (`RestoreObject`) before they can be read or copied — this is distinct from a lifecycle *transition*, which only changes storage class going forward.
+- Lifecycle rules can be scoped by **prefix and/or tag**, so different folders/object tags in the same bucket can follow different retention/transition schedules.
 
 ---
 
@@ -280,7 +304,7 @@ User → Cognito User Pool (sign-up/sign-in, issues JWT)
 
 ---
 
-## Exam & Interview Thumb-Rules
+## Exam Thumb-Rules
 
 - **CloudWatch** → performance & alarms · **CloudTrail** → who/what API audit · **Config** → resource history & compliance.
 - **Global Accelerator** → non-HTTP/TCP-UDP, static IP, fast failover, DNS-cache-proof cutovers · **CloudFront** → HTTP content caching/CDN.
